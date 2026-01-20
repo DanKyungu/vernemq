@@ -99,6 +99,29 @@
          end
  end}.
 
+%% @doc Configure delayed PUBACK for specific ACL names (topic patterns).
+%% Example: delay_puback.my_acl_name = on
+{mapping, "delay_puback.$acl_name", "vmq_server.delay_puback_config", [
+    {datatype, flag}
+]}.
+
+{translation, "vmq_server.delay_puback_config",
+  fun(Conf) ->
+    Mappings = lists:filter(
+        fun({K, _V}) ->
+            cuttlefish_variable:is_fuzzy_match(
+                K, string:tokens("delay_puback.$acl_name", ".")
+            )
+        end,
+        Conf
+    ),
+    [
+        list_to_binary(AclName)
+     || {[_, AclName], true} <- Mappings
+    ]
+  end
+}.
+
 %% @doc Client registrations can be either happen in a coordinated or
 %% uncoordinated fashion. Uncoordinated registrations are faster and
 %% will cause other clients with the same client-id to be eventually

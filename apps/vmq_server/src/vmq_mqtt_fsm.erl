@@ -31,6 +31,8 @@
 -define(IS_PROTO_3(X), X =:= 3; X =:= 131).
 -define(IS_BRIDGE(X), X =:= 131; X =:= 132).
 
+-define(DELAYED_PUBACK_TBL, vmq_delayed_puback_table).
+
 -type timestamp() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
 
 -record(state, {
@@ -259,7 +261,9 @@ connected(
                     qos = QoS,
                     mountpoint = MountPoint,
                     msg_ref = vmq_mqtt_fsm_util:msg_ref(),
-                    sg_policy = SGPolicy
+                    sg_policy = SGPolicy,
+                    pub_msg_id = MessageId,
+                    pub_pid = self()
                 },
                 dispatch_publish(QoS, MessageId, Msg, State)
         end,
@@ -327,7 +331,11 @@ connected(
     {NewState2, Out};
 connected(
     #mqtt_puback{message_id = MessageId},
-    #state{waiting_acks = WAcks, subscriber_id = SubscriberId, username = Username} = State
+    #state{
+        waiting_acks = WAcks,
+        subscriber_id = SubscriberId,
+        username = Username
+    } = State
 ) ->
     %% qos1 flow
     _ = vmq_metrics:incr_mqtt_puback_received(),
@@ -338,7 +346,9 @@ connected(
             retain = IsRetain,
             qos = QoS,
             acl_name = Name,
-            persisted = Persisted
+            persisted = Persisted,
+            pub_msg_id = PubMsgId,
+            pub_pid = PubPid
         } ->
             _ = vmq_plugin:all(on_delivery_complete, [
                 Username,
@@ -350,6 +360,7 @@ connected(
                 #matched_acl{name = Name},
                 Persisted
             ]),
+            maybe_send_puback(Name, PubPid, PubMsgId),
             handle_waiting_msgs(State#state{waiting_acks = maps:remove(MessageId, WAcks)});
         not_found ->
             _ = vmq_metrics:incr_mqtt_error_invalid_puback(),
@@ -1083,9 +1094,8 @@ dispatch_publish_qos1(MessageId, Msg, State) ->
         reg_view = RegView
     } = State,
     case publish(RegView, User, SubscriberId, Msg) of
-        {ok, _, SessCtrl} ->
-            _ = vmq_metrics:incr_mqtt_puback_sent(),
-            {[#mqtt_puback{message_id = MessageId}], SessCtrl};
+        {ok, #vmq_msg{acl_name = AclName}, SessCtrl} ->
+            {maybe_send_immediate_puback(AclName, MessageId), SessCtrl};
         {error, not_allowed} when ?IS_PROTO_4(Proto) ->
             %% we have to close connection for 3.1.1
             _ = vmq_metrics:incr_mqtt_error_auth_publish(),
@@ -1099,6 +1109,17 @@ dispatch_publish_qos1(MessageId, Msg, State) ->
             %% can't publish due to overload or netsplit
             _ = vmq_metrics:incr_mqtt_error_publish(),
             []
+    end.
+
+-spec maybe_send_immediate_puback(AclName :: binary() | undefined, MessageId :: msg_id()) ->
+    [mqtt_puback()].
+maybe_send_immediate_puback(AclName, MessageId) ->
+    case should_send_puback(AclName) of
+        true ->
+            [];
+        false ->
+            _ = vmq_metrics:incr_mqtt_puback_sent(),
+            [#mqtt_puback{message_id = MessageId}]
     end.
 
 -spec dispatch_publish_qos2(msg_id(), msg(), state()) ->
@@ -1761,3 +1782,18 @@ check_mqtt_auth_errors(QoSTable) ->
 extract_qos(not_allowed) -> not_allowed;
 extract_qos(QoS) when is_integer(QoS) -> QoS;
 extract_qos({QoS, _SubInfo}) -> QoS.
+
+-spec maybe_send_puback(binary() | undefined, pid() | undefined, msg_id()) -> ok.
+maybe_send_puback(Name, PubPid, PubMsgId) ->
+    case should_send_puback(Name) of
+        true when is_pid(PubPid) ->
+            vmq_ranch:send_puback(PubPid, PubMsgId);
+        _ ->
+            ok
+    end.
+
+-spec should_send_puback(binary() | undefined) -> boolean().
+should_send_puback(undefined) ->
+    false;
+should_send_puback(AclName) ->
+    ets:member(?DELAYED_PUBACK_TBL, AclName).
