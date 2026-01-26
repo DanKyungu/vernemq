@@ -6,9 +6,6 @@
 <img alt="Documentation" src="https://img.shields.io/badge/documentation-yes-brightgreen.svg" target="_blank" />
 </a>
 
-![VerneMQ Logo](https://i.imgur.com/bln3fK3.jpg)
-
-
 This project is a fork of the awesome ❤️  [MQTT broker](https://github.com/vernemq/vernemq) of the same name. We wanted to add some functionalities that we think can be useful for specific use-cases.
 
 VerneMQ is a high-performance, distributed MQTT message broker. It scales
