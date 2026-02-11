@@ -27,5 +27,5 @@ jobs:
       - name: Build and push
         run: |
           docker build -t devnet56/rusheat:latest -t devnet56/rusheat:${{ steps.get_version.outputs.version }} -f docker/Dockerfile .
-          docker push devnet56/rusheat:latest
-          docker push devnet56/rusheat:${{ steps.get_version.outputs.version }}
+          docker push devnet56/vernemq:latest
+          docker push devnet56/vernemq:${{ steps.get_version.outputs.version }}
