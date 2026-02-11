@@ -11,8 +11,7 @@ This project is a fork of the awesome ❤️  [MQTT broker](https://github.com/v
 VerneMQ is a high-performance, distributed MQTT message broker. It scales
 horizontally and vertically on commodity hardware to support a high number of
 concurrent publishers and consumers while maintaining low latency and fault
-tolerance. VerneMQ is the reliable message hub for your IoT platform or smart
-products.
+tolerance. VerneMQ is the reliable message hub for your IoT platform or smart products.
 
 VerneMQ is an Apache2 licensed distributed [MQTT](http://www.mqtt.org) broker,
 developed in [Erlang](http://www.erlang.org).
